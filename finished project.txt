@@ -1,0 +1,335 @@
+;-------------------------------------------------------------
+JMP main	;main
+compare_h: DW 127								; hlines max
+desired_color: DW 255							; max color
+random_generatedC: DW 0							; rand color
+guess: DB "Impossible,guessthe wrong color!"	; guess str
+DB 0
+lives_str: DB "Miss:"							; lives str
+DB 0
+lives: DB "3"									; lives var
+DB 0
+score_str: DB "Score:"							; score str
+DB 0
+score: DB "0"									; score var
+DB 0
+chosensquare: DW 0								; rand square
+gameover: DB "   GAME OVER "					; gameover str
+DB 0
+right_str: DB "CORRECT"							; right str
+DB 0
+wrong_str: DB "INCORRECT"						; wrong str
+DB 0
+;-------------------------------------------------------------
+draw_white_lines:
+	PUSH A
+	MOVB AH, 127
+	MOVB AL, 0
+	MOV B, 0
+    ;draw 255color counter b(0) to if b(256) then break
+	;from 0,127 or 127,0 pix to 255,127 or 127,255
+horizontal_line_loop:
+	CMP B, 256
+	JE break_h_loop
+	OUT 8
+	PUSH A
+	MOV A, 255
+	OUT 9
+	POP A
+	INC B
+	INCB AL
+	JMP horizontal_line_loop
+break_h_loop:
+	MOVB AH, 0
+	MOVB AL, 127
+	MOV B, 0
+vertical_line_loop:
+	CMP B, 256
+	JE break_v_loop
+	OUT 8
+	PUSH A
+	MOV A, 255
+	OUT 9
+	POP A
+	INC B
+	INCB AH
+	JMP vertical_line_loop
+break_v_loop:
+	POP A
+	RET
+;-------------------------------------------------------------
+rndgen223: ;rnd color up to 223 gen and pass through b
+	PUSH A
+	IN 10
+	AND A, 223
+	CMP A, 223
+	JA rndgen223
+	MOV B, A
+	POP A
+	RET
+;-------------------------------------------------------------
+rndgensquare: ;rnd square gen 0-3 and draw it on the field
+	PUSH A
+	IN 10
+	AND A, 3
+	CMP A, 0
+	JE setsquare1
+	CMP A, 1
+	JE setsquare2
+	CMP A, 2
+	JE setsquare3
+	CMP A, 3
+	JE setsquare4
+    
+setsquare1:
+	MOVB DH, 0
+	MOVB DL, 0
+	ADD B, 32
+	CALL draw_square
+	SUB B, 32
+	MOVB DL, 128
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 0
+	MOVB DH, 128
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 128
+	CALL draw_square
+	MOV [chosensquare], 1
+	JMP endrndsquare
+
+setsquare2:
+	MOVB DL, 0
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 0
+	ADD B, 32
+	CALL draw_square
+	SUB B, 32
+	MOVB DL, 0
+	MOVB DH, 128
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 128
+	CALL draw_square
+	MOV [chosensquare], 2
+	JMP endrndsquare
+
+setsquare3:
+	MOVB DL, 0
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 0
+	MOVB DH, 128
+	ADD B, 32
+	CALL draw_square
+	SUB B, 32
+	MOVB DL, 128
+	MOVB DH, 128
+	CALL draw_square
+	MOV [chosensquare], 3
+	JMP endrndsquare
+
+setsquare4:
+	MOVB DL, 0
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 0
+	CALL draw_square
+	MOVB DL, 0
+	MOVB DH, 128
+	CALL draw_square
+	MOVB DL, 128
+	MOVB DH, 128
+	ADD B, 32
+	CALL draw_square
+	SUB B, 32
+	MOV [chosensquare], 4
+	JMP endrndsquare
+endrndsquare:
+	POP A
+	RET
+;-------------------------------------------------------------
+draw_square: ; (B-color, DL - minimum horizontal value, DH - minimum vertical value)
+	PUSH A
+	MOV [desired_color], B
+	PUSH B
+	MOVB AH, DH
+	DECB AH
+	MOV C, 0
+	CMPB DL, 128
+	JNE checkDH
+	MOV [compare_h], 128
+;b to des color
+;ah min vert -1
+;c counter 0
+;if dl != 128 then if dh != 128 then reset square else dec c
+;else compare-h = 128
+checkDH:
+	CMPB DH, 128
+	JNE reset_square_loop
+	DEC C
+; B will be used to count horizontal
+; C will be used to count vertical
+reset_square_loop:
+	CMP C, 127
+	JE end_square_loop
+	MOVB AL, DL
+	INCB AH
+	MOV B, 0
+	INC C
+draw_square_loop:
+	CMP B, [compare_h]
+	JE reset_square_loop
+	OUT 8
+	PUSH A
+	MOV A, [desired_color]
+	OUT 9
+	POP A
+	INCB AL
+	INC B
+	JMP draw_square_loop
+end_square_loop:
+	MOV [compare_h], 127
+	POP B
+	POP A
+	RET
+;-------------------------------------------------------------
+print: 					;(C-string, D-address)register args
+	PUSH A
+	MOV A, C
+loopprint:
+	MOVB BL, [A]
+	CMPB BL, 0
+	JE returnprint
+	MOVB [D], BL
+	INC D
+	INC A
+	JMP loopprint
+returnprint:
+	POP A
+	RET
+;using A instead of C
+;looping the address while comparing it w 0 to end it
+;inc D and A to get new address
+;-------------------------------------------------------------
+cleartextdisplay:		; cleartextdisplay function
+	PUSH A					; push A
+	PUSH D					; push  D
+	MOV A, 31				; A <- 31
+	MOV D, 0x1000			; D <- print adress
+loop_clr:				; loop_clr
+	CMP A, 0				; if A == 0
+	JE clr_return			; then clr_return
+	MOV [D], 0				; D address <- 0
+	INC D					; D++
+	DEC A					; A--
+	JMP loop_clr			; loop_clr
+clr_return:				; then clr_return
+	POP D					; pop D
+	POP A					; pop A
+	RET
+;-------------------------------------------------------------
+main:					; main function start
+	MOV SP, 0x0FFF			; stack init
+	MOV A, 2				; A <- 2
+	OUT 7					; VIDMODE
+	MOV A, 3				; A <- 3
+	OUT 7					; VIDMODE
+	MOV C, guess			; C <- guess string
+	MOV D, 0x1000			; D <- print address
+	CALL print				; print function
+;-------------------------------------------------------------
+game:					; game loop
+	CALL draw_white_lines	; draw_white_lines function
+	CALL rndgen223			; rndgen223 function
+	CALL rndgensquare 		; rndgensquare function
+	CALL cleartextdisplay	; cleartextdisplay
+	MOV C, lives_str		; C <- lives string
+	MOV D, 0x1000			; D <- print address
+	CALL print				; print function
+	MOV C, lives			; C <- lives variable
+	MOV D, 0x1006			; D <- print address
+	CALL print				; print function
+	MOV C, score_str		; C <- score string
+	MOV D, 0x1008			; D <- print address
+	CALL print				; print function
+	MOV C, score			; C <- score variable
+	MOV D, 0x100F			; D <- print address
+	CALL print				; print function
+;-------------------------------------------------------------
+keyinput:				; keyinput loop
+	IN 5					; KBDSTATUS
+	AND A, 1				; A mask 1
+	CMP A, 1				; if A != 1
+	JNE keyinput			; then keyinput
+	IN 6					; KBDDATA
+	CMP A, '1'				; if A == any number
+	JE checkifcorrect1		; then checkfunction anynumber
+	CMP A, '2'
+	JE checkifcorrect2
+	CMP A, '3'
+	JE checkifcorrect3
+	CMP A, '4'
+	JE checkifcorrect4
+	JMP keyinput			;else keyinput
+;-------------------------------------------------------------
+checkifcorrect1:		;checkfunction anynumber
+MOV B, [chosensquare]		;B <- chosen
+CMP B, 1
+JE correct
+JMP wrong
+
+checkifcorrect2:
+MOV B, [chosensquare]
+CMP B, 2
+JE correct
+JMP wrong
+
+checkifcorrect3:
+MOV B, [chosensquare]
+CMP B, 3
+JE correct
+JMP wrong
+
+checkifcorrect4:
+MOV B, [chosensquare]
+CMP B, 4
+JE correct
+JMP wrong
+;-------------------------------------------------------------
+correct:				;correct block
+	MOV A, score			; A <- score variable
+	MOVB BL, [A]			; BL <- A adress
+	INCB BL					; BL ++ 
+	MOVB [A], BL			; A adress <- BL
+	MOV C, right_str		; C <- right string
+	MOV D, 0x1010			; D <- print adress
+	CALL print				; print function
+	JMP game				; loop again
+
+wrong:					; wrong block
+	MOV A, lives			; A <- lives variable
+	MOVB BL, [A]			; BL <- A adress
+	CMPB BL, '0'			; if BL==0
+	JE game_over			; then game_over function
+	DECB BL					; BL --
+	MOVB [A], BL			; A adress <- BL
+	MOV C, wrong_str		; C <- wrong string
+	MOV D, 0x1010			; D <- print adress
+	CALL print				; print function
+	JMP game				; loop again
+
+game_over:				; game_over
+	CALL cleartextdisplay	; cleartextdisplay function
+	MOV C, gameover			; C <- gameover string
+	MOV D, 0x1000			; D <- print adress
+	CALL print				; print function
+	HLT						; finish
+;-------------------------------------------------------------
